@@ -33,6 +33,16 @@ jobs:
         run: |
           python -X utf8 mirage-tmp/mirage_patch.py
 
+      - name: Fix CMake path for Mirage
+        shell: pwsh
+        working-directory: tdesktop
+        run: |
+          $f = "Telegram/CMakeLists.txt"
+          $c = Get-Content $f -Raw
+          $c = $c.Replace('nice_target_sources(Telegram SourceFiles PRIVATE ${MIRAGE_SOURCES})', 'nice_target_sources(Telegram ${CMAKE_CURRENT_SOURCE_DIR}/SourceFiles PRIVATE ${MIRAGE_SOURCES})')
+          Set-Content -Path $f -Value $c -NoNewline
+          Select-String -Path $f -Pattern "MIRAGE_SOURCES" | Out-Host
+
       - name: Fix msys2 package name
         shell: pwsh
         working-directory: tdesktop
@@ -51,11 +61,29 @@ jobs:
         with:
           arch: x64
 
+      - name: Restore libraries cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            Libraries
+            ThirdParty
+          key: mirage-libs-v1
+        continue-on-error: true
+
       - name: Prepare libraries (долго, 1.5-3 часа)
         shell: cmd
         working-directory: tdesktop
         run: |
           call Telegram\build\prepare\win.bat skip-release silent
+
+      - name: Save libraries cache
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            Libraries
+            ThirdParty
+          key: mirage-libs-v1
+        continue-on-error: true
 
       - name: Configure
         shell: cmd
