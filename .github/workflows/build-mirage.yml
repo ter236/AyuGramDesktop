@@ -1,0 +1,72 @@
+name: Build Mirage Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (Windows x64)
+    runs-on: windows-2022
+    timeout-minutes: 360
+    env:
+      UPLOAD_ARTIFACT: "true"
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: tdesktop
+
+      - name: Insert Mirage
+        shell: pwsh
+        working-directory: tdesktop
+        run: |
+          if (-not (Test-Path mirage-pack.zip)) { throw "Нет файла mirage-pack.zip на главной странице проекта" }
+          Expand-Archive mirage-pack.zip -DestinationPath mirage-tmp -Force
+          New-Item -ItemType Directory -Force Telegram/SourceFiles/mirage | Out-Null
+          Copy-Item -Recurse -Force mirage-tmp/mirage/* Telegram/SourceFiles/mirage/
+
+      - name: Patch code (auto)
+        shell: pwsh
+        working-directory: tdesktop
+        run: |
+          python mirage-tmp/mirage_patch.py
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Prepare libraries (долго, 1.5-3 часа)
+        shell: cmd
+        working-directory: tdesktop
+        run: |
+          call Telegram\build\prepare\win.bat skip-release silent
+
+      - name: Configure
+        shell: cmd
+        working-directory: tdesktop
+        run: |
+          call Telegram\configure.bat x64 -D TDESKTOP_API_TEST=ON -D DESKTOP_APP_DISABLE_AUTOUPDATE=1
+
+      - name: Build
+        shell: cmd
+        working-directory: tdesktop\out
+        run: |
+          msbuild -m Telegram.sln /p:Configuration=Release /p:Platform=x64
+
+      - name: Collect exe
+        shell: pwsh
+        working-directory: tdesktop
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Get-ChildItem out\Release -File | Where-Object { $_.Extension -in ".exe",".dll" } | Copy-Item -Destination dist
+          Get-ChildItem dist | Out-Host
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mirage-Windows-Release
+          path: tdesktop/dist/*
+          retention-days: 14
