@@ -33,6 +33,19 @@ jobs:
         run: |
           python -X utf8 mirage-tmp/mirage_patch.py
 
+      - name: Fix msys2 package name
+        shell: pwsh
+        working-directory: tdesktop
+        run: |
+          Get-ChildItem Telegram\build\prepare -Recurse -File | ForEach-Object {
+            $c = Get-Content $_.FullName -Raw
+            if ($c -match 'mingw-w64-x86_64-diffutils') {
+              $c = $c -replace 'mingw-w64-x86_64-diffutils', 'diffutils'
+              Set-Content -Path $_.FullName -Value $c -NoNewline
+              Write-Host "fixed $($_.FullName)"
+            }
+          }
+
       - name: Set up MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
